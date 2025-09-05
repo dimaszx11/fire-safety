@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { ArrowLeft, Camera } from "lucide-react"
-import { BrowserMultiFormatReader } from "@zxing/browser"
+import { BrowserMultiFormatReader } from "@zxing/browser";
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -63,18 +63,18 @@ export default function ScannerPage() {
     }
   }
 
- const stopCamera = () => {
+const stopCamera = () => {
   if (codeReaderRef.current) {
     try {
-      // Hentikan decoding dan lepaskan kamera
-      codeReaderRef.current.decodeFromVideoDevice(undefined, videoRef.current!, () => {})
+     (codeReaderRef.current as any).reset(); // stop kamera & release track
     } catch (err) {
-      console.error("Error stopping camera:", err)
+      console.error("Error stopping camera:", err);
     }
-    codeReaderRef.current = null
+    codeReaderRef.current = null;
   }
-  setIsScanning(false)
-}
+  setIsScanning(false);
+};
+
 
 
   useEffect(() => {

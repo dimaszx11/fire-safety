@@ -96,17 +96,17 @@ export default function ScannerPage() {
       } catch {
         // fallback ke facingMode environment
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { exact: "environment" } },
-        })
-        videoRef.current.srcObject = stream
+  video: true,
+});
+videoRef.current.srcObject = stream;
 
         const controls = await codeReader.decodeFromVideoElement(
-          videoRef.current!,
-          (result, err, controls) => {
-            if (controls) controlsRef.current = controls
-            if (result) handleScanResult(result.getText())
-          }
-        )
+  videoRef.current!,
+  (result, err, controls) => {
+    if (controls) controlsRef.current = controls;
+    if (result) handleScanResult(result.getText());
+  }
+);
         controlsRef.current = controls
       }
 

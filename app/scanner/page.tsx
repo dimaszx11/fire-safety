@@ -27,28 +27,35 @@ export default function ScannerPage() {
   }
 
   const startCamera = async () => {
-    try {
-      setError(null)
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "environment", // Use back camera
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-      })
+  try {
+    setError(null)
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" }, // lebih fleksibel
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false, // jangan minta audio
+    })
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-        streamRef.current = stream
-        setHasPermission(true)
-        setIsScanning(true)
-      }
-    } catch (err) {
-      console.error("Camera access error:", err)
-      setError("Unable to access camera. Please check permissions.")
-      setHasPermission(false)
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream
+      // penting: panggil play() supaya langsung tampil
+      await videoRef.current.play().catch((err) => {
+        console.error("Video play error:", err)
+      })
     }
+
+    streamRef.current = stream
+    setHasPermission(true)
+    setIsScanning(true)
+  } catch (err) {
+    console.error("Camera access error:", err)
+    setError("Unable to access camera. Please check permissions.")
+    setHasPermission(false)
   }
+}
+
 
   const stopCamera = () => {
     if (streamRef.current) {
@@ -211,17 +218,18 @@ export default function ScannerPage() {
             </CardHeader>
             <CardContent>
               <div className="flex gap-2">
-                <input
+               <input
                   type="text"
-                  placeholder="Enter barcode (e.g., FE001)"
-                  className="flex-1 px-3 py-2 border border-input rounded-md"
-                  onKeyPress={(e) => {
-                    if (e.key === "Enter") {
-                      const value = (e.target as HTMLInputElement).value
-                      if (value) simulateBarcodeScan(value)
-                    }
-                  }}
-                />
+                    placeholder="Enter barcode (e.g., FE001)"
+                    className="flex-1 px-3 py-2 border border-input rounded-md"
+                    onKeyDown={(e) => {
+    if (e.key === "Enter") {
+      const value = (e.target as HTMLInputElement).value
+      if (value) simulateBarcodeScan(value)
+    }
+  }}
+/>
+
                 <Button
                   onClick={() => {
                     const input = document.querySelector('input[type="text"]') as HTMLInputElement

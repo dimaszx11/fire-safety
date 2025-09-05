@@ -2,10 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { ArrowLeft, Camera } from "lucide-react"
-import {
-  BrowserMultiFormatReader,
-  IScannerControls,
-} from "@zxing/browser"
+import { BrowserMultiFormatReader } from "@zxing/browser"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -26,33 +23,20 @@ export default function ScannerPage() {
   const router = useRouter()
 
   const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null)
-  const controlsRef = useRef<IScannerControls | null>(null)
 
-  // Mock database
   const mockEquipment = {
-    FE001: {
-      id: 1,
-      type: "Fire Extinguisher",
-      location: "Building A - Floor 1",
-    },
+    FE001: { id: 1, type: "Fire Extinguisher", location: "Building A - Floor 1" },
     FA001: { id: 2, type: "Fire Alarm", location: "Building A - Floor 2" },
     HY001: { id: 3, type: "Hydrant", location: "Building B - Parking Lot" },
-    EL001: {
-      id: 4,
-      type: "Emergency Light",
-      location: "Building A - Floor 3",
-    },
+    EL001: { id: 4, type: "Emergency Light", location: "Building A - Floor 3" },
   }
 
   const handleScanResult = (code: string) => {
     setScannedCode(code)
     stopCamera()
-
-    if (mockEquipment[code as keyof typeof mockEquipment]) {
-      const equipment = mockEquipment[code as keyof typeof mockEquipment]
-      setTimeout(() => {
-        router.push(`/equipment/${equipment.id}`)
-      }, 1500)
+    const equipment = mockEquipment[code as keyof typeof mockEquipment]
+    if (equipment) {
+      setTimeout(() => router.push(`/equipment/${equipment.id}`), 1500)
     } else {
       setError(`Equipment with barcode "${code}" not found in database.`)
     }
@@ -62,53 +46,39 @@ export default function ScannerPage() {
     try {
       setError(null)
       setScannedCode(null)
-      if (!videoRef.current) return
+      const video = videoRef.current
+      if (!video) return
 
-      // stop instance lama
-      controlsRef.current?.stop()
-      if (videoRef.current.srcObject) {
-        ;(videoRef.current.srcObject as MediaStream)
-          .getTracks()
-          .forEach((t) => t.stop())
-        videoRef.current.srcObject = null
+      // stop stream lama
+      if (video.srcObject) {
+        ;(video.srcObject as MediaStream).getTracks().forEach((t) => t.stop())
       }
 
       const codeReader = new BrowserMultiFormatReader()
       codeReaderRef.current = codeReader
 
-      // cari kamera belakang
+      // 1. cari device kamera belakang
       const devices = await BrowserMultiFormatReader.listVideoInputDevices()
-      const back = devices.find((d) =>
-        d.label.toLowerCase().includes("back") ||
-        d.label.toLowerCase().includes("rear")
+      const backCamera = devices.find((d) =>
+        /back|rear|environment/i.test(d.label)
       )
-
-      try {
-        const controls = await codeReader.decodeFromVideoDevice(
-          back?.deviceId,
-          videoRef.current!,
-          (result, err, controls) => {
-            if (controls) controlsRef.current = controls
-            if (result) handleScanResult(result.getText())
-          }
-        )
-        controlsRef.current = controls
-      } catch {
-        // fallback ke facingMode environment
-        const stream = await navigator.mediaDevices.getUserMedia({
-  video: true,
-});
-videoRef.current.srcObject = stream;
-
-        const controls = await codeReader.decodeFromVideoElement(
-  videoRef.current!,
-  (result, err, controls) => {
-    if (controls) controlsRef.current = controls;
-    if (result) handleScanResult(result.getText());
-  }
-);
-        controlsRef.current = controls
+      const constraints: MediaStreamConstraints = {
+        video: backCamera
+          ? { deviceId: backCamera.deviceId }
+          : { facingMode: "environment" },
       }
+
+      // 2. minta izin & dapatkan stream
+      const stream = await navigator.mediaDevices.getUserMedia(constraints)
+
+      // 3. pasang stream ke video
+      video.srcObject = stream
+      await video.play() // <-- penting!
+
+      // 4. mulai decode
+      codeReader.decodeFromStream(stream, video, (result, err) => {
+        if (result) handleScanResult(result.getText())
+      })
 
       setIsScanning(true)
     } catch (e) {
@@ -118,33 +88,21 @@ videoRef.current.srcObject = stream;
   }
 
   const stopCamera = () => {
-    try {
-      controlsRef.current?.stop()
-    } catch (e) {
-      console.error("Error stopping scanner:", e)
-    }
-    controlsRef.current = null
-    codeReaderRef.current = null
-
-    if (videoRef.current?.srcObject) {
-      ;(videoRef.current.srcObject as MediaStream)
-        .getTracks()
-        .forEach((t) => t.stop())
-      videoRef.current.srcObject = null
-    }
-
-    setIsScanning(false)
+  codeReaderRef.current = null;
+  const video = videoRef.current;
+  if (video?.srcObject) {
+    (video.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
+    video.srcObject = null;
   }
+  setIsScanning(false);
+};
 
   useEffect(() => {
-    return () => {
-      stopCamera()
-    }
+    return () => stopCamera()
   }, [])
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
@@ -155,12 +113,8 @@ videoRef.current.srcObject = stream;
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">
-                Barcode Scanner
-              </h1>
-              <p className="text-muted-foreground">
-                Scan equipment barcode for details
-              </p>
+              <h1 className="text-2xl font-bold text-foreground">Barcode Scanner</h1>
+              <p className="text-muted-foreground">Scan equipment barcode for details</p>
             </div>
           </div>
         </div>
@@ -174,9 +128,7 @@ videoRef.current.srcObject = stream;
                 <Camera className="h-5 w-5" />
                 Camera Scanner
               </CardTitle>
-              <CardDescription>
-                Point your camera at the equipment barcode
-              </CardDescription>
+              <CardDescription>Point your camera at the equipment barcode</CardDescription>
             </CardHeader>
             <CardContent>
               {!isScanning && !scannedCode && (
@@ -184,9 +136,7 @@ videoRef.current.srcObject = stream;
                   <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
                     <div>
                       <Camera className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                      <p className="text-muted-foreground">
-                        Camera preview will appear here
-                      </p>
+                      <p className="text-muted-foreground">Camera preview will appear here</p>
                     </div>
                   </div>
                   <Button onClick={startCamera} className="w-full">
@@ -207,11 +157,7 @@ videoRef.current.srcObject = stream;
                       className="w-full h-full object-cover"
                     />
                   </div>
-                  <Button
-                    onClick={stopCamera}
-                    variant="outline"
-                    className="w-full"
-                  >
+                  <Button onClick={stopCamera} variant="outline" className="w-full">
                     Stop Camera
                   </Button>
                 </div>
@@ -224,25 +170,17 @@ videoRef.current.srcObject = stream;
                       <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Camera className="h-8 w-8 text-green-600" />
                       </div>
-                      <p className="text-green-800 font-medium">
-                        Barcode Scanned Successfully!
-                      </p>
-                      <p className="text-green-600 text-sm">
-                        Code: {scannedCode}
-                      </p>
+                      <p className="text-green-800 font-medium">Barcode Scanned Successfully!</p>
+                      <p className="text-green-600 text-sm">Code: {scannedCode}</p>
                     </div>
                   </div>
-                  <p className="text-muted-foreground">
-                    Redirecting to equipment details...
-                  </p>
+                  <p className="text-muted-foreground">Redirecting to equipment details...</p>
                 </div>
               )}
 
               {error && (
                 <Alert className="border-red-200 bg-red-50">
-                  <AlertDescription className="text-red-800">
-                    {error}
-                  </AlertDescription>
+                  <AlertDescription className="text-red-800">{error}</AlertDescription>
                 </Alert>
               )}
             </CardContent>

@@ -17,12 +17,12 @@ import { useRouter } from "next/navigation"
 
 export default function ScannerPage() {
   const [isScanning, setIsScanning] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [scannedCode, setScannedCode] = useState<string | null>(null)
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const [error, setError] = useState(null)
+  const [scannedCode, setScannedCode] = useState(null)
+  const videoRef = useRef(null)
   const router = useRouter()
 
-  const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null)
+  const codeReaderRef = useRef(null)
 
   const mockEquipment = {
     FE001: { id: 1, type: "Fire Extinguisher", location: "Building A - Floor 1" },
@@ -31,10 +31,10 @@ export default function ScannerPage() {
     EL001: { id: 4, type: "Emergency Light", location: "Building A - Floor 3" },
   }
 
-  const handleScanResult = (code: string) => {
+  const handleScanResult = (code) => {
     setScannedCode(code)
     stopCamera()
-    const equipment = mockEquipment[code as keyof typeof mockEquipment]
+    const equipment = mockEquipment[code]
     if (equipment) {
       setTimeout(() => router.push(`/equipment/${equipment.id}`), 1500)
     } else {
@@ -51,31 +51,31 @@ export default function ScannerPage() {
 
       // stop stream lama
       if (video.srcObject) {
-        ;(video.srcObject as MediaStream).getTracks().forEach((t) => t.stop())
+        video.srcObject.getTracks().forEach((t) => t.stop())
       }
 
       const codeReader = new BrowserMultiFormatReader()
       codeReaderRef.current = codeReader
 
-      // 1. cari device kamera belakang
+      // cari device kamera belakang
       const devices = await BrowserMultiFormatReader.listVideoInputDevices()
       const backCamera = devices.find((d) =>
         /back|rear|environment/i.test(d.label)
       )
-      const constraints: MediaStreamConstraints = {
+      const constraints = {
         video: backCamera
           ? { deviceId: backCamera.deviceId }
           : { facingMode: "environment" },
       }
 
-      // 2. minta izin & dapatkan stream
+      // minta izin & dapatkan stream
       const stream = await navigator.mediaDevices.getUserMedia(constraints)
 
-      // 3. pasang stream ke video
+      // pasang stream ke video
       video.srcObject = stream
-      await video.play() // <-- penting!
+      await video.play() // penting
 
-      // 4. mulai decode
+      // mulai decode
       codeReader.decodeFromStream(stream, video, (result, err) => {
         if (result) handleScanResult(result.getText())
       })
@@ -88,14 +88,14 @@ export default function ScannerPage() {
   }
 
   const stopCamera = () => {
-  codeReaderRef.current = null;
-  const video = videoRef.current;
-  if (video?.srcObject) {
-    (video.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
-    video.srcObject = null;
+    codeReaderRef.current = null
+    const video = videoRef.current
+    if (video?.srcObject) {
+      video.srcObject.getTracks().forEach((t) => t.stop())
+      video.srcObject = null
+    }
+    setIsScanning(false)
   }
-  setIsScanning(false);
-};
 
   useEffect(() => {
     return () => stopCamera()
@@ -113,8 +113,12 @@ export default function ScannerPage() {
               </Button>
             </Link>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Barcode Scanner</h1>
-              <p className="text-muted-foreground">Scan equipment barcode for details</p>
+              <h1 className="text-2xl font-bold text-foreground">
+                Barcode Scanner
+              </h1>
+              <p className="text-muted-foreground">
+                Scan equipment barcode for details
+              </p>
             </div>
           </div>
         </div>
@@ -128,7 +132,9 @@ export default function ScannerPage() {
                 <Camera className="h-5 w-5" />
                 Camera Scanner
               </CardTitle>
-              <CardDescription>Point your camera at the equipment barcode</CardDescription>
+              <CardDescription>
+                Point your camera at the equipment barcode
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {!isScanning && !scannedCode && (
@@ -136,7 +142,9 @@ export default function ScannerPage() {
                   <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
                     <div>
                       <Camera className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                      <p className="text-muted-foreground">Camera preview will appear here</p>
+                      <p className="text-muted-foreground">
+                        Camera preview will appear here
+                      </p>
                     </div>
                   </div>
                   <Button onClick={startCamera} className="w-full">
@@ -157,7 +165,11 @@ export default function ScannerPage() {
                       className="w-full h-full object-cover"
                     />
                   </div>
-                  <Button onClick={stopCamera} variant="outline" className="w-full">
+                  <Button
+                    onClick={stopCamera}
+                    variant="outline"
+                    className="w-full"
+                  >
                     Stop Camera
                   </Button>
                 </div>
@@ -170,17 +182,25 @@ export default function ScannerPage() {
                       <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Camera className="h-8 w-8 text-green-600" />
                       </div>
-                      <p className="text-green-800 font-medium">Barcode Scanned Successfully!</p>
-                      <p className="text-green-600 text-sm">Code: {scannedCode}</p>
+                      <p className="text-green-800 font-medium">
+                        Barcode Scanned Successfully!
+                      </p>
+                      <p className="text-green-600 text-sm">
+                        Code: {scannedCode}
+                      </p>
                     </div>
                   </div>
-                  <p className="text-muted-foreground">Redirecting to equipment details...</p>
+                  <p className="text-muted-foreground">
+                    Redirecting to equipment details...
+                  </p>
                 </div>
               )}
 
               {error && (
                 <Alert className="border-red-200 bg-red-50">
-                  <AlertDescription className="text-red-800">{error}</AlertDescription>
+                  <AlertDescription className="text-red-800">
+                    {error}
+                  </AlertDescription>
                 </Alert>
               )}
             </CardContent>

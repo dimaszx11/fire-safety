@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { ArrowLeft, Camera } from "lucide-react"
-import { BrowserMultiFormatReader } from "@zxing/browser";
+import { ArrowLeft, Camera, RefreshCw } from "lucide-react"
+import { BrowserMultiFormatReader } from "@zxing/browser"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -13,6 +13,9 @@ export default function ScannerPage() {
   const [isScanning, setIsScanning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [scannedCode, setScannedCode] = useState<string | null>(null)
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
+  const [currentDeviceId, setCurrentDeviceId] = useState<string | null>(null)
+
   const videoRef = useRef<HTMLVideoElement>(null)
   const router = useRouter()
   const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null)
@@ -25,18 +28,44 @@ export default function ScannerPage() {
     EL001: { id: 4, type: "Emergency Light", location: "Building A - Floor 3" },
   }
 
-  const startCamera = async () => {
+  // Ambil daftar kamera
+  useEffect(() => {
+    const loadDevices = async () => {
+      try {
+        const allDevices = await navigator.mediaDevices.enumerateDevices()
+        const videoDevices = allDevices.filter(d => d.kind === "videoinput")
+        setDevices(videoDevices)
+
+        if (videoDevices.length > 0) {
+          const backCam = videoDevices.find(d =>
+            d.label.toLowerCase().includes("back") ||
+            d.label.toLowerCase().includes("rear")
+          )
+          setCurrentDeviceId(backCam ? backCam.deviceId : videoDevices[0].deviceId)
+        }
+      } catch (err) {
+        console.error("Error loading devices:", err)
+      }
+    }
+
+    loadDevices()
+  }, [])
+
+  // Mulai scanner dengan deviceId tertentu
+  const startCamera = async (deviceId?: string) => {
     try {
       setError(null)
       setScannedCode(null)
 
       if (!videoRef.current) return
 
+      stopCamera() // pastikan kamera lama dimatikan
+
       const codeReader = new BrowserMultiFormatReader()
       codeReaderRef.current = codeReader
 
       await codeReader.decodeFromVideoDevice(
-        undefined,
+        deviceId || undefined,
         videoRef.current,
         (result, err) => {
           if (result) {
@@ -63,19 +92,28 @@ export default function ScannerPage() {
     }
   }
 
-const stopCamera = () => {
-  if (codeReaderRef.current) {
-    try {
-     (codeReaderRef.current as any).reset(); // stop kamera & release track
-    } catch (err) {
-      console.error("Error stopping camera:", err);
+  const stopCamera = () => {
+    if (codeReaderRef.current) {
+      try {
+        (codeReaderRef.current as any).reset();
+      } catch (err) {
+        console.error("Error stopping camera:", err)
+      }
+      codeReaderRef.current = null
     }
-    codeReaderRef.current = null;
+    setIsScanning(false)
   }
-  setIsScanning(false);
-};
 
-
+  // Ganti kamera
+  const switchCamera = () => {
+    if (devices.length > 1) {
+      const currentIndex = devices.findIndex(d => d.deviceId === currentDeviceId)
+      const nextIndex = (currentIndex + 1) % devices.length
+      const nextId = devices[nextIndex].deviceId
+      setCurrentDeviceId(nextId)
+      startCamera(nextId)
+    }
+  }
 
   useEffect(() => {
     return () => {
@@ -122,7 +160,7 @@ const stopCamera = () => {
                       <p className="text-muted-foreground">Camera preview will appear here</p>
                     </div>
                   </div>
-                  <Button onClick={startCamera} className="w-full">
+                  <Button onClick={() => startCamera(currentDeviceId || undefined)} className="w-full">
                     <Camera className="h-4 w-4 mr-2" />
                     Start Camera
                   </Button>
@@ -134,9 +172,17 @@ const stopCamera = () => {
                   <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
                     <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
                   </div>
-                  <Button onClick={stopCamera} variant="outline" className="w-full">
-                    Stop Camera
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button onClick={stopCamera} variant="outline" className="w-full">
+                      Stop Camera
+                    </Button>
+                    {devices.length > 1 && (
+                      <Button onClick={switchCamera} variant="secondary" className="w-full">
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        Switch Camera
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
 

@@ -1,112 +1,86 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
-import { ArrowLeft, Camera, Flashlight, FlashlightOff } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { BrowserMultiFormatReader, IScannerControls } from "@zxing/browser"
+import { ArrowLeft, Camera } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function ScannerPage() {
-  const [isScanning, setIsScanning] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null)
-  const [flashlightOn, setFlashlightOn] = useState(false)
-  const [scannedCode, setScannedCode] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
-  const router = useRouter()
+  const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null)
+  const controlsRef = useRef<IScannerControls | null>(null)
 
-  // Mock equipment database for demo
-  const mockEquipment = {
-    FE001: { id: 1, type: "Fire Extinguisher", location: "Building A - Floor 1" },
-    FA001: { id: 2, type: "Fire Alarm", location: "Building A - Floor 2" },
-    HY001: { id: 3, type: "Hydrant", location: "Building B - Parking Lot" },
-    EL001: { id: 4, type: "Emergency Light", location: "Building A - Floor 3" },
-  }
+  const [isScanning, setIsScanning] = useState(false)
+  const [scannedCode, setScannedCode] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const startCamera = async () => {
-  try {
-    setError(null)
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: "environment" }, // lebih fleksibel
-        width: { ideal: 1280 },
-        height: { ideal: 720 },
-      },
-      audio: false, // jangan minta audio
-    })
+    try {
+      setError(null)
+      codeReaderRef.current = new BrowserMultiFormatReader()
 
-    if (videoRef.current) {
-      videoRef.current.srcObject = stream
-      // penting: panggil play() supaya langsung tampil
-      await videoRef.current.play().catch((err) => {
-        console.error("Video play error:", err)
-      })
+      const devices = await BrowserMultiFormatReader.listVideoInputDevices()
+      console.log("📷 Devices:", devices)
+
+      const backCamera =
+        devices.find((d) =>
+          d.label.toLowerCase().includes("back") ||
+          d.label.toLowerCase().includes("rear")
+        ) || devices[0]
+
+      if (!backCamera) {
+        setError("Tidak ada kamera terdeteksi.")
+        return
+      }
+
+      if (videoRef.current) {
+        videoRef.current.setAttribute("playsinline", "true")
+      }
+
+      controlsRef.current = await codeReaderRef.current.decodeFromVideoDevice(
+        backCamera.deviceId,
+        videoRef.current!,
+        (result, err) => {
+          if (result) {
+            handleBarcodeScan(result.getText())
+          }
+          if (err && err.name !== "NotFoundException") {
+            console.error("Scan error:", err)
+          }
+        }
+      )
+
+      setIsScanning(true)
+    } catch (err) {
+      console.error("Camera error:", err)
+      setError("Tidak bisa mengakses kamera. Periksa permission.")
     }
-
-    streamRef.current = stream
-    setHasPermission(true)
-    setIsScanning(true)
-  } catch (err) {
-    console.error("Camera access error:", err)
-    setError("Unable to access camera. Please check permissions.")
-    setHasPermission(false)
   }
-}
-
 
   const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
+    if (controlsRef.current) {
+      controlsRef.current.stop()
+      controlsRef.current = null
     }
     setIsScanning(false)
   }
 
-// const toggleFlashlight = async () => {
-//   if (streamRef.current) {
-//     const videoTrack = streamRef.current.getVideoTracks()[0]
-//     if (!videoTrack) return
-
-//     const capabilities = videoTrack.getCapabilities()
-//     if (capabilities.torch) {
-//       try {
-//         await videoTrack.applyConstraints({
-//           advanced: [{ torch: !flashlightOn }],
-//         })
-//         setFlashlightOn(!flashlightOn)
-//       } catch (err) {
-//         console.error("Flashlight toggle failed:", err)
-//       }
-//     } else {
-//       console.warn("Torch not supported on this device")
-//     }
-//   }
-// }
-
-
-  // Simulate barcode detection (in real app, use @zxing/library or similar)
-  const simulateBarcodeScan = (code: string) => {
+  const handleBarcodeScan = (code: string) => {
     setScannedCode(code)
-    stopCamera()
-
-    // Check if equipment exists
-    if (mockEquipment[code as keyof typeof mockEquipment]) {
-      const equipment = mockEquipment[code as keyof typeof mockEquipment]
-      setTimeout(() => {
-        router.push(`/equipment/${equipment.id}`)
-      }, 1500)
-    } else {
-      setError(`Equipment with barcode "${code}" not found in database.`)
-    }
+    console.log("✅ Barcode scanned:", code)
   }
 
   useEffect(() => {
-    return () => {
-      stopCamera()
-    }
+    return () => stopCamera()
   }, [])
 
   return (
@@ -123,8 +97,12 @@ export default function ScannerPage() {
                 </Button>
               </Link>
               <div>
-                <h1 className="text-2xl font-bold text-foreground">Barcode Scanner</h1>
-                <p className="text-muted-foreground">Scan equipment barcode for details</p>
+                <h1 className="text-2xl font-bold text-foreground">
+                  Barcode Scanner
+                </h1>
+                <p className="text-muted-foreground">
+                  Scan equipment barcode for details
+                </p>
               </div>
             </div>
           </div>
@@ -140,7 +118,9 @@ export default function ScannerPage() {
                 <Camera className="h-5 w-5" />
                 Camera Scanner
               </CardTitle>
-              <CardDescription>Point your camera at the equipment barcode to scan</CardDescription>
+              <CardDescription>
+                Point your camera at the equipment barcode to scan
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {!isScanning && !scannedCode && (
@@ -148,7 +128,9 @@ export default function ScannerPage() {
                   <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
                     <div className="text-center">
                       <Camera className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                      <p className="text-muted-foreground">Camera preview will appear here</p>
+                      <p className="text-muted-foreground">
+                        Camera preview will appear here
+                      </p>
                     </div>
                   </div>
                   <Button onClick={startCamera} className="w-full">
@@ -161,7 +143,13 @@ export default function ScannerPage() {
               {isScanning && (
                 <div className="space-y-4">
                   <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
-                    <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-full object-cover"
+                    />
                     {/* Scanner overlay */}
                     <div className="absolute inset-0 flex items-center justify-center">
                       <div className="w-64 h-32 border-2 border-primary rounded-lg relative">
@@ -171,17 +159,19 @@ export default function ScannerPage() {
                         <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-primary"></div>
                       </div>
                     </div>
+                    {/* Real-time scanning indicator */}
+                    <div className="absolute top-4 left-4 bg-black/70 text-white px-3 py-2 rounded-lg text-sm">
+                      🔍 Scanning for barcodes...
+                    </div>
                   </div>
 
                   <div className="flex gap-2">
-                    <Button onClick={stopCamera} variant="outline" className="flex-1 bg-transparent">
+                    <Button
+                      onClick={stopCamera}
+                      variant="outline"
+                      className="flex-1 bg-transparent"
+                    >
                       Stop Camera
-                    </Button>
-                    {/* <Button onClick={toggleFlashlight} variant="outline" size="icon">
-                      {flashlightOn ? <FlashlightOff className="h-4 w-4" /> : <Flashlight className="h-4 w-4" />}
-                    </Button> */}
-                    <Button onClick={() => simulateBarcodeScan("FE001")} size="sm">
-                      Demo Scan
                     </Button>
                   </div>
                 </div>
@@ -194,17 +184,25 @@ export default function ScannerPage() {
                       <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Camera className="h-8 w-8 text-green-600" />
                       </div>
-                      <p className="text-green-800 font-medium">Barcode Scanned Successfully!</p>
-                      <p className="text-green-600 text-sm">Code: {scannedCode}</p>
+                      <p className="text-green-800 font-medium">
+                        Barcode Scanned Successfully!
+                      </p>
+                      <p className="text-green-600 text-sm">
+                        Code: {scannedCode}
+                      </p>
                     </div>
                   </div>
-                  <p className="text-muted-foreground">Redirecting to equipment details...</p>
+                  <p className="text-muted-foreground">
+                    Redirecting to equipment details...
+                  </p>
                 </div>
               )}
 
               {error && (
                 <Alert className="border-red-200 bg-red-50">
-                  <AlertDescription className="text-red-800">{error}</AlertDescription>
+                  <AlertDescription className="text-red-800">
+                    {error}
+                  </AlertDescription>
                 </Alert>
               )}
             </CardContent>
@@ -214,55 +212,33 @@ export default function ScannerPage() {
           <Card>
             <CardHeader>
               <CardTitle>Manual Entry</CardTitle>
-              <CardDescription>Can't scan? Enter the barcode manually</CardDescription>
+              <CardDescription>
+                Can't scan? Enter the barcode manually
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex gap-2">
-               <input
+                <input
                   type="text"
-                    placeholder="Enter barcode (e.g., FE001)"
-                    className="flex-1 px-3 py-2 border border-input rounded-md"
-                    onKeyDown={(e) => {
-    if (e.key === "Enter") {
-      const value = (e.target as HTMLInputElement).value
-      if (value) simulateBarcodeScan(value)
-    }
-  }}
-/>
-
+                  placeholder="Enter barcode (e.g., FE001)"
+                  className="flex-1 px-3 py-2 border border-input rounded-md"
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter") {
+                      const value = (e.target as HTMLInputElement).value
+                      if (value) handleBarcodeScan(value)
+                    }
+                  }}
+                />
                 <Button
                   onClick={() => {
-                    const input = document.querySelector('input[type="text"]') as HTMLInputElement
-                    if (input?.value) simulateBarcodeScan(input.value)
+                    const input = document.querySelector(
+                      'input[type="text"]'
+                    ) as HTMLInputElement
+                    if (input?.value) handleBarcodeScan(input.value)
                   }}
                 >
                   Search
                 </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Quick Access */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Quick Access</CardTitle>
-              <CardDescription>Common equipment for testing</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-2">
-                {Object.entries(mockEquipment).map(([code, equipment]) => (
-                  <Button
-                    key={code}
-                    variant="outline"
-                    onClick={() => simulateBarcodeScan(code)}
-                    className="text-left justify-start"
-                  >
-                    <div>
-                      <div className="font-medium">{code}</div>
-                      <div className="text-xs text-muted-foreground">{equipment.type}</div>
-                    </div>
-                  </Button>
-                ))}
               </div>
             </CardContent>
           </Card>

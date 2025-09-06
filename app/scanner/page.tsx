@@ -142,7 +142,7 @@ export default function ScannerPage() {
 
               {isScanning && (
                 <div className="space-y-4">
-                  <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
+                  <div className="relative aspect-video rounded-lg overflow-hidden">
                     <video
                       ref={videoRef}
                       autoPlay

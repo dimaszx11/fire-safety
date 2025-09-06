@@ -13,43 +13,52 @@ export default function ScannerPage() {
   const [isScanning, setIsScanning] = useState(false)
 
   // Start camera
-  const startCamera = async () => {
-    try {
-      setError(null)
-      codeReaderRef.current = new BrowserMultiFormatReader()
+  // Start camera
+const startCamera = async () => {
+  try {
+    setError(null)
+    codeReaderRef.current = new BrowserMultiFormatReader()
 
-      // 📷 Pakai kamera belakang jika tersedia
-      const devices = await BrowserMultiFormatReader.listVideoInputDevices()
-      const backCamera = devices.find((d) =>
+    const devices = await BrowserMultiFormatReader.listVideoInputDevices()
+    console.log("📷 Devices:", devices) // debug, lihat daftar kamera
+
+    // fallback ke kamera pertama kalau tidak ada "back"
+    const backCamera =
+      devices.find((d) =>
         d.label.toLowerCase().includes("back") ||
         d.label.toLowerCase().includes("rear")
-      )
-      const deviceId = backCamera?.deviceId || devices[0]?.deviceId
+      ) || devices[0]
 
-      if (!deviceId) {
-        setError("Tidak ada kamera terdeteksi.")
-        return
-      }
-
-      controlsRef.current = await codeReaderRef.current.decodeFromVideoDevice(
-        deviceId,
-        videoRef.current!,
-        (result, err) => {
-          if (result) {
-            handleBarcodeScan(result.getText())
-          }
-          if (err && err.name !== "NotFoundException") {
-            console.error("Scan error:", err)
-          }
-        }
-      )
-
-      setIsScanning(true)
-    } catch (err) {
-      console.error("Camera error:", err)
-      setError("Tidak bisa mengakses kamera. Periksa permission.")
+    if (!backCamera) {
+      setError("Tidak ada kamera terdeteksi.")
+      return
     }
+
+    // penting untuk Safari/iOS
+    if (videoRef.current) {
+      videoRef.current.setAttribute("playsinline", "true")
+    }
+
+    controlsRef.current = await codeReaderRef.current.decodeFromVideoDevice(
+      backCamera.deviceId,
+      videoRef.current!,
+      (result, err) => {
+        if (result) {
+          handleBarcodeScan(result.getText())
+        }
+        if (err && err.name !== "NotFoundException") {
+          console.error("Scan error:", err)
+        }
+      }
+    )
+
+    setIsScanning(true)
+  } catch (err) {
+    console.error("Camera error:", err)
+    setError("Tidak bisa mengakses kamera. Periksa permission.")
   }
+}
+
 
   // Stop camera
   const stopCamera = () => {

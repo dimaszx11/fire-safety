@@ -160,7 +160,7 @@ export default function ScannerPage() {
                       </div>
                     </div>
                     {/* Real-time scanning indicator */}
-                    <div className="absolute top-4 left-4 bg-black/70 text-white px-3 py-2 rounded-lg text-sm">
+                    <div className="absolute top-4 left-4 text-white px-3 py-2 rounded-lg text-sm">
                       🔍 Scanning for barcodes...
                     </div>
                   </div>

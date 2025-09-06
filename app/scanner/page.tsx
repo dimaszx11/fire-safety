@@ -1,109 +1,76 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
-import { BrowserMultiFormatReader, IScannerControls } from "@zxing/browser"
-import { ArrowLeft, Camera } from "lucide-react"
+import { Camera, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card"
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
-export default function ScannerPage() {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const codeReaderRef = useRef<BrowserMultiFormatReader | null>(null)
-  const controlsRef = useRef<IScannerControls | null>(null)
-
+export default function BarcodeScannerPage() {
   const [isScanning, setIsScanning] = useState(false)
   const [scannedCode, setScannedCode] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
 
+  // Start kamera belakang
   const startCamera = async () => {
+    setError(null)
     try {
-      setError(null)
-      codeReaderRef.current = new BrowserMultiFormatReader()
-
-      const devices = await BrowserMultiFormatReader.listVideoInputDevices()
-      console.log("📷 Devices:", devices)
-
-      const backCamera =
-        devices.find((d) =>
-          d.label.toLowerCase().includes("back") ||
-          d.label.toLowerCase().includes("rear")
-        ) || devices[0]
-
-      if (!backCamera) {
-        setError("Tidak ada kamera terdeteksi.")
-        return
-      }
-
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: "environment" } }, // kamera belakang
+      })
       if (videoRef.current) {
-        videoRef.current.setAttribute("playsinline", "true")
+        videoRef.current.srcObject = stream
       }
-
-      controlsRef.current = await codeReaderRef.current.decodeFromVideoDevice(
-        backCamera.deviceId,
-        videoRef.current!,
-        (result, err) => {
-          if (result) {
-            handleBarcodeScan(result.getText())
-          }
-          if (err && err.name !== "NotFoundException") {
-            console.error("Scan error:", err)
-          }
-        }
-      )
-
+      streamRef.current = stream
       setIsScanning(true)
     } catch (err) {
-      console.error("Camera error:", err)
-      setError("Tidak bisa mengakses kamera. Periksa permission.")
+      console.error(err)
+      setError("Failed to access camera. Please allow camera permission.")
     }
   }
 
+  // Stop kamera
   const stopCamera = () => {
-    if (controlsRef.current) {
-      controlsRef.current.stop()
-      controlsRef.current = null
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
     }
     setIsScanning(false)
   }
 
+  // Handle barcode hasil scan manual
   const handleBarcodeScan = (code: string) => {
+    stopCamera()
     setScannedCode(code)
-    console.log("✅ Barcode scanned:", code)
+    // contoh redirect / fetch detail
+    setTimeout(() => {
+      window.location.href = `/equipment/${code}`
+    }, 2000)
   }
 
   useEffect(() => {
-    return () => stopCamera()
+    return () => {
+      stopCamera()
+    }
   }, [])
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative">
       {/* Header */}
-      <header className="border-b bg-card">
+      <header className="border-b bg-card relative z-20">
         <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/">
-                <Button variant="ghost" size="sm">
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back to Home
-                </Button>
-              </Link>
-              <div>
-                <h1 className="text-2xl font-bold text-foreground">
-                  Barcode Scanner
-                </h1>
-                <p className="text-muted-foreground">
-                  Scan equipment barcode for details
-                </p>
-              </div>
+          <div className="flex items-center gap-4">
+            <Link href="/">
+              <Button variant="ghost" size="sm">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Home
+              </Button>
+            </Link>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Barcode Scanner</h1>
+              <p className="text-muted-foreground">Scan equipment barcode for details</p>
             </div>
           </div>
         </div>
@@ -118,9 +85,7 @@ export default function ScannerPage() {
                 <Camera className="h-5 w-5" />
                 Camera Scanner
               </CardTitle>
-              <CardDescription>
-                Point your camera at the equipment barcode to scan
-              </CardDescription>
+              <CardDescription>Point your camera at the equipment barcode to scan</CardDescription>
             </CardHeader>
             <CardContent>
               {!isScanning && !scannedCode && (
@@ -128,9 +93,7 @@ export default function ScannerPage() {
                   <div className="aspect-video bg-muted rounded-lg flex items-center justify-center">
                     <div className="text-center">
                       <Camera className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                      <p className="text-muted-foreground">
-                        Camera preview will appear here
-                      </p>
+                      <p className="text-muted-foreground">Camera preview will appear here</p>
                     </div>
                   </div>
                   <Button onClick={startCamera} className="w-full">
@@ -140,37 +103,36 @@ export default function ScannerPage() {
                 </div>
               )}
 
+              {/* Fullscreen Camera Mode */}
               {isScanning && (
-                <div className="space-y-4">
-                  <div className="relative aspect-video rounded-lg overflow-hidden">
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      className="w-full h-full object-cover"
-                    />
-                    {/* Scanner overlay */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-64 h-32 border-2 border-primary rounded-lg relative">
-                        <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-primary"></div>
-                        <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-primary"></div>
-                        <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-primary"></div>
-                        <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-primary"></div>
-                      </div>
-                    </div>
-                    {/* Real-time scanning indicator */}
-                    <div className="absolute top-4 left-4 text-white px-3 py-2 rounded-lg text-sm">
-                      🔍 Scanning for barcodes...
+                <div className="fixed inset-0 bg-black z-50">
+                  {/* Video Kamera */}
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+
+                  {/* Overlay scanner */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-64 h-32 border-2 border-primary rounded-lg relative">
+                      <div className="absolute top-0 left-0 w-6 h-6 border-t-4 border-l-4 border-primary"></div>
+                      <div className="absolute top-0 right-0 w-6 h-6 border-t-4 border-r-4 border-primary"></div>
+                      <div className="absolute bottom-0 left-0 w-6 h-6 border-b-4 border-l-4 border-primary"></div>
+                      <div className="absolute bottom-0 right-0 w-6 h-6 border-b-4 border-r-4 border-primary"></div>
                     </div>
                   </div>
 
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={stopCamera}
-                      variant="outline"
-                      className="flex-1 bg-transparent"
-                    >
+                  {/* Scanning indicator */}
+                  <div className="absolute top-6 left-6 bg-black/70 text-white px-3 py-2 rounded-lg text-sm">
+                    🔍 Scanning for barcodes...
+                  </div>
+
+                  {/* Tombol kontrol */}
+                  <div className="absolute bottom-6 left-0 right-0 flex justify-center px-4">
+                    <Button onClick={stopCamera} variant="destructive" className="w-full max-w-md">
                       Stop Camera
                     </Button>
                   </div>
@@ -184,37 +146,27 @@ export default function ScannerPage() {
                       <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <Camera className="h-8 w-8 text-green-600" />
                       </div>
-                      <p className="text-green-800 font-medium">
-                        Barcode Scanned Successfully!
-                      </p>
-                      <p className="text-green-600 text-sm">
-                        Code: {scannedCode}
-                      </p>
+                      <p className="text-green-800 font-medium">Barcode Scanned Successfully!</p>
+                      <p className="text-green-600 text-sm">Code: {scannedCode}</p>
                     </div>
                   </div>
-                  <p className="text-muted-foreground">
-                    Redirecting to equipment details...
-                  </p>
+                  <p className="text-muted-foreground">Redirecting to equipment details...</p>
                 </div>
               )}
 
               {error && (
                 <Alert className="border-red-200 bg-red-50">
-                  <AlertDescription className="text-red-800">
-                    {error}
-                  </AlertDescription>
+                  <AlertDescription className="text-red-800">{error}</AlertDescription>
                 </Alert>
               )}
             </CardContent>
           </Card>
 
-          {/* Manual Entry Card */}
+          {/* Manual Entry */}
           <Card>
             <CardHeader>
               <CardTitle>Manual Entry</CardTitle>
-              <CardDescription>
-                Can't scan? Enter the barcode manually
-              </CardDescription>
+              <CardDescription>Can't scan? Enter the barcode manually</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex gap-2">
@@ -231,9 +183,7 @@ export default function ScannerPage() {
                 />
                 <Button
                   onClick={() => {
-                    const input = document.querySelector(
-                      'input[type="text"]'
-                    ) as HTMLInputElement
+                    const input = document.querySelector('input[type="text"]') as HTMLInputElement
                     if (input?.value) handleBarcodeScan(input.value)
                   }}
                 >
